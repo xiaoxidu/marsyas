@@ -92,7 +92,8 @@ void ControlsWidget::refresh()
 
 void ControlsWidget::onItemClicked(const QModelIndex & index)
 {
-  MarControlPtr control = m_model->controlAt(index);
+  //MarControlPtr control = m_model->controlAt(index);
+  MarControlPtr control = m_model->controlAt(m_filter_model->mapToSource(index));
   if (!control.isInvalid())
   {
     QString path = QString::fromStdString( control->getName() );
