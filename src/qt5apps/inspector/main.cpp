@@ -5,6 +5,8 @@
 #include "widgets/controls_widget.h"
 #include "widgets/realvec_widget.h"
 #include "widgets/stats_widget.h"
+//#include "widgets/capture_widget.h"
+#include "widgets/track_widget.h"
 
 #include <marsyas/system/MarSystemManager.h>
 
@@ -109,6 +111,38 @@ void SignalDockWidget::closeEvent(QCloseEvent *event)
   deleteLater();
 }
 
+TrackDockWidget::TrackDockWidget(DebugController* debugger):
+    m_track_widget(new TrackWidget(debugger))
+{
+    setWidget(m_track_widget);
+    setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Expanding );
+
+    setWindowTitle("Empty Signal View");
+
+    connect( debugger, SIGNAL(ticked()),
+             m_track_widget, SLOT(refresh()) );
+
+    connect( m_track_widget, &TrackWidget::pathChanged,
+             [this](const QString & title)
+
+    {
+      if (!title.isEmpty())
+        setWindowTitle(title);
+      else
+        setWindowTitle("Empty Signal View");
+    });
+}
+
+void TrackDockWidget::mousePressEvent(QMouseEvent *)
+{
+  emit clicked(m_track_widget);
+}
+
+void TrackDockWidget::closeEvent(QCloseEvent *event)
+{
+  event->ignore();
+  deleteLater();
+}
 
 Main::Main():
   m_root_system(0)
@@ -182,16 +216,28 @@ Main::Main():
   m_main_window->addDockWidget(Qt::BottomDockWidgetArea, m_dock_msg_widget);
 
   m_stats_widget = new StatisticsWidget(&m_action_manager, m_debugger);
+  //m_capture_widget = new CaptureWidget();
+
   m_dock_stats_widget = new QDockWidget;
   m_dock_stats_widget->setWidget(m_stats_widget);
   m_dock_stats_widget->setWindowTitle("Statistics");
+
+  //m_dock_capture_widget = new QDockWidget;
+  //m_main_window->addDockWidget(Qt::BottomDockWidgetArea, m_dock_capture_widget);
+  //m_dock_capture_widget->setWindowTitle("Capture");
+  //m_tab_capture_widget = new QTabWidget;
+  //m_dock_capture_widget->setWidget(m_tab_capture_widget);
+
   m_main_window->addDockWidget(Qt::BottomDockWidgetArea, m_dock_stats_widget);
   m_main_window->tabifyDockWidget(m_dock_msg_widget, m_dock_stats_widget);
+  //m_main_window->tabifyDockWidget(m_dock_msg_widget, m_dock_capture_widget);
+
 
   m_dock_msg_widget->raise();
 
   m_dock_msg_widget->hide();
   m_dock_stats_widget->hide();
+  //m_dock_capture_widget->hide();
 
   connect( this, SIGNAL(fileChanged(QString)), m_system_label,
            SLOT(setFileName(QString)) );
@@ -257,6 +303,12 @@ void Main::createActions()
 
   a = action(ActionManager::AddRealvecWidget) = new QAction(tr("Add Signal View"), this);
   connect(a, SIGNAL(triggered()), this, SLOT(addRealvecWidget()));
+
+  a = action(ActionManager::AddTrack) = new QAction(tr("Add Track"), this);
+  connect(a, SIGNAL(triggered()), this, SLOT(addTrackWidget()));
+
+  a = action(ActionManager::RemoveTrack) = new QAction(tr("Remove Track"), this);
+  connect(a, SIGNAL(triggered()), this, SLOT(removeTrackWidget()));
 }
 
 void Main::createMenu()
@@ -286,6 +338,7 @@ void Main::createMenu()
   menu = menuBar->addMenu(tr("&View"));
   menu->addAction(m_dock_msg_widget->toggleViewAction());
   menu->addAction(m_dock_stats_widget->toggleViewAction());
+  //menu->addAction(m_dock_capture_widget->toggleViewAction());
   menu->addAction(action(ActionManager::AddRealvecWidget));
   menuBar->addMenu(menu);
 }
@@ -306,6 +359,9 @@ void Main::createToolbar()
   toolbar->addWidget(m_step_control);
   toolbar->addAction(action(ActionManager::Tick));
   toolbar->addAction(action(ActionManager::Rewind));
+
+  toolbar->addAction(action(ActionManager::AddTrack));
+  toolbar->addAction(action(ActionManager::RemoveTrack));
 }
 
 void Main::createGraphStyles()
@@ -456,6 +512,26 @@ void Main::addRealvecWidget()
   m_current_signal_widget = dock_widget->widget();
 }
 
+void Main::addTrackWidget()
+{
+    TrackDockWidget * dock_widget = new TrackDockWidget(m_debugger);
+
+    connect(dock_widget, &TrackDockWidget::clicked,
+            [this](TrackWidget* widget){ m_current_track_widget = widget; });
+
+    connect(this, SIGNAL(systemChanged()),
+            dock_widget->widget(), SLOT(clear()));
+
+    m_main_window->addDockWidget(Qt::BottomDockWidgetArea, dock_widget,Qt::Vertical);
+
+    m_current_track_widget = dock_widget->widget();
+}
+
+void Main::removeTrackWidget()
+{
+    //m_tab_capture_widget->removeTab(m_tab_capture_widget->currentIndex());
+}
+
 void Main::onReferenceChanged(const QString &filename)
 {
   if (!filename.isEmpty())
@@ -495,6 +571,8 @@ void Main::systemInputClicked( const QString & path )
 
   if (m_current_signal_widget)
     m_current_signal_widget->displayPort(system, Input);
+  if (m_current_track_widget)
+    m_current_track_widget->displayPort(system, TrackWidget::Input);
 }
 
 void Main::systemOutputClicked( const QString & path )
@@ -507,6 +585,8 @@ void Main::systemOutputClicked( const QString & path )
 
   if (m_current_signal_widget)
     m_current_signal_widget->displayPort(system, Output);
+  if (m_current_track_widget)
+    m_current_track_widget->displayPort(system, TrackWidget::Output);
 }
 
 void Main::controlClicked( const QString & path )
@@ -515,6 +595,8 @@ void Main::controlClicked( const QString & path )
 
   if (m_current_signal_widget)
     m_current_signal_widget->displayControl(system, path);
+  if (m_current_track_widget)
+    m_current_track_widget->displayControl(system, path);
 }
 
 void Main::updateGraphBugs()
