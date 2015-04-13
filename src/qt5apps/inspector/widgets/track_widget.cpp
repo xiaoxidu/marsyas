@@ -337,6 +337,7 @@ void RealvecPlotCurve::setData( const realvec * data )
     for (mrs_natural r = 0; r<row_count; ++r)
     {
       QwtPlotCurve *curve = new QwtPlotCurve;
+      curve->setRenderHint(QwtPlotItem::RenderAntialiased,true);
       curve->setPen( QColor::fromHsvF( (qreal)r / row_count, 1, 1) );
       curve->attach(m_plotter);
       m_curves.append(curve);
