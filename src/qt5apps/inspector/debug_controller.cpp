@@ -15,8 +15,11 @@ DebugController::DebugController( QObject * parent ):
 
 void DebugController::initControlInfomation(Marsyas::MarSystem * m_system)
 {
-    for(auto cit=m_system->controls().cbegin();cit!=m_system->controls().cend();++cit){
-        if(!cit->second->hasType<mrs_string>() && !cit->second->hasType<mrs_complex>()){
+    m_controls_acumulated.clear();
+    for(auto cit=m_system->controls().cbegin();cit!=m_system->controls().cend();++cit)
+    {
+        if(!cit->second->hasType<mrs_string>() && !cit->second->hasType<mrs_complex>())
+        {
           m_controls_acumulated.insert
           (std::pair<std::string,controlInformation>(cit->first,controlInformation()));
         }
@@ -27,7 +30,8 @@ void DebugController::initControlInfomation(Marsyas::MarSystem * m_system)
 void DebugController::initPortInfomation(Marsyas::MarSystem * m_system)
 {
     std::string m_path = m_system->path();
-    m_ports_acummulated.insert(std::pair<std::string,portInformation>(m_path,portInformation()));
+    portInformation pInfor;
+    m_ports_acummulated.insert(std::pair<std::string,portInformation>(m_path,pInfor));
 
     std::vector<MarSystem*> children = m_system->getChildren();
     for (MarSystem *child : children)
@@ -40,8 +44,10 @@ void DebugController::appendRealvec(const Marsyas::realvec & from, Marsyas::real
     int fromCol = from.getCols();
     int toCol = to.getCols();
     to.stretch(fromRow,fromCol+toCol);
-    for(int c=0; c<fromCol; ++c){
-        for(int r=0; r<fromRow; ++r){
+    for(int c=0; c<fromCol; ++c)
+    {
+        for(int r=0; r<fromRow; ++r)
+        {
             to(r,c+toCol) = from(r,c);
         }
     }
@@ -75,7 +81,8 @@ bool DebugController::setRecording(const QString &filename)
     return false;
 
   Debug::FileReader *reader = new Debug::FileReader(filename.toStdString());
-  if (!reader->isOpen()) {
+  if (!reader->isOpen())
+  {
     qWarning() << "*** Recording file could not be opened:" << filename;
     delete reader;
     return false;
@@ -105,24 +112,36 @@ void DebugController::tick( int count )
 
     m_recorder->clear();
 
-    for (int i = 0; i < count; ++i){
+    for (int i = 0; i < count; ++i)
+    {
       m_system->tick();
       m_recorder->commit();
 
-      for(auto it=m_controls_acumulated.begin();it!=m_controls_acumulated.end();++it){
-        if(it->first.find("mrs_realvec")!=std::string::npos){
-            appendRealvec(m_system->getControl(it->first)->to<mrs_realvec>(),it->second.data);
+      for(auto it=m_controls_acumulated.begin();it!=m_controls_acumulated.end();++it)
+      {
+        if(it->first.find("mrs_realvec")!=std::string::npos)
+        {
+            mrs_realvec ctrlData = m_system->getControl(it->first)->to<mrs_realvec>();
+            appendRealvec(ctrlData,it->second.data);
+            if(i == 0)
+            {
+                it->second.getDataSize() = ctrlData.getCols();
+            }
         }
-        else{
+        else
+        {
 
             mrs_real controlVal = 0.0;
-            if(it->first.find("mrs_real")!=std::string::npos){
+            if(it->first.find("mrs_real")!=std::string::npos)
+            {
                 controlVal = m_system->getControl(it->first)->to<mrs_real>();
             }
-            else if(it->first.find("mrs_natural")!=std::string::npos){
+            else if(it->first.find("mrs_natural")!=std::string::npos)
+            {
                 controlVal = m_system->getControl(it->first)->to<mrs_natural>();
             }
-            else if(it->first.find("mrs_bool")!=std::string::npos){
+            else if(it->first.find("mrs_bool")!=std::string::npos)
+            {
                 controlVal = m_system->getControl(it->first)->to<mrs_bool>();
             }
             it->second.data.stretch(it->second.data.getSize()+1);
@@ -131,21 +150,26 @@ void DebugController::tick( int count )
       }
 
 
-      for(auto it=m_ports_acummulated.begin();it!=m_ports_acummulated.end();++it){
+      for(auto it=m_ports_acummulated.begin();it!=m_ports_acummulated.end();++it)
+      {
 
         const Marsyas::Debug::Record::Entry * entry = this->currentState()->entry(it->first);
-        if(entry){
+        if(entry)
+        {
+
+            if(i == 0)
+            {
+                it->second.input_data_size = entry->input.getCols();
+                it->second.output_data_size = entry->output.getCols();
+            }
 
             appendRealvec(entry->input,it->second.data_input);
             appendRealvec(entry->output,it->second.data_output);
         }
       }
+      m_tick_count += count;
 
     }
-
-    m_tick_count += count;
-
-    //m_recorder->commit();
 
     if (m_reader && !m_reader->eof())
     {
@@ -170,14 +194,19 @@ void DebugController::rewind()
   m_tick_count = 0;
 
 
-  for(auto it=m_controls_acumulated.begin();it!=m_controls_acumulated.end();++it){
+  for(auto it=m_controls_acumulated.begin();it!=m_controls_acumulated.end();++it)
+  {
     it->second.data=realvec();
+    it->second.data_size = 1;
   }
 
-  for(auto it=m_ports_acummulated.begin();it!=m_ports_acummulated.end();++it){
+  for(auto it=m_ports_acummulated.begin();it!=m_ports_acummulated.end();++it)
+  {
 
     it->second.data_input=realvec();
     it->second.data_output=realvec();
+    it->second.input_data_size = 1;
+    it->second.output_data_size = 1;
   }
 
   emit tickCountChanged(m_tick_count);

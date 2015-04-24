@@ -15,15 +15,413 @@
 using namespace Marsyas;
 using namespace MarsyasQt;
 
-using namespace track;
+void CustomizedPlot::paintEvent(QPaintEvent *p)
+{
+    //plotWidgetOutline();
+    if(data)
+    {
+       if(type == Points)
+       {
+            plotPoint();
+       }
+       else if(type == Line)
+       {
+           plotLine();
+       }
+       else if(type == Sticks)
+       {
+           plotStick();
+       }
+       else
+       {
+           plotLine();
+       }
+
+    }
+    else
+    {
+        return;
+    }
+
+}
+
+void CustomizedPlot::plotPoint()
+{
+
+    QPainter painter(this);
+
+    mrs_natural row_count = data->getRows();
+    mrs_natural column_count = data->getCols();
+
+    mrs_real max = data->maxval();
+    mrs_real min = data->minval();
+
+    if(max==min)
+    {
+        max++;
+        min--;
+    }
+    mrs_natural total_count = data_size*m_debugger->getTickCount();
+    mrs_natural offset = total_count-column_count;
+
+    for(mrs_natural r = 0; r<row_count;r++)
+    {
+
+        QPen pen;
+        //if(row_count<plot_width && column_count!=0){
+        //    pen.setWidth(static_cast<int>(std::ceil(plot_width/total_count)));
+        //}
+        //else{
+            pen.setWidth(1);
+        //}
+        pen.setColor(QColor::fromHsvF( (qreal)r / row_count, 1, 1));
+        painter.setPen(pen);
+        mrs_natural minY = INT_MAX;
+        mrs_natural maxY = INT_MIN;
+        mrs_natural currX = -plot_margin;
+
+        mrs_natural x, y;
+
+        for(mrs_natural c = 0; c<offset;c++)
+        {
+            x = (total_count==1 ? plot_margin : plot_margin + (width()-plot_margin*2.0)/(total_count-1)*c);
+            y = plot_margin + (height()-plot_margin*2.0)/(max-min)*(max);
+
+            if(y>maxY)
+            {
+                maxY = y;
+            }
+
+            if(y<minY)
+            {
+                minY = y;
+            }
+
+            if(x!=currX)
+            {
+                if(minY!=INT_MAX && maxY!=INT_MIN)
+                {
+                    painter.drawLine(currX,minY,currX,maxY);
+                }
+                currX = x;
+                minY = INT_MAX;
+                maxY = INT_MIN;
+            }
+        }
+
+        for(mrs_natural c = 0; c<column_count;c++)
+        {
+            x = (total_count==1 ? plot_margin : plot_margin + (width()-plot_margin*2.0)/(total_count-1)*(c+offset));
+            y = plot_margin + (height()-plot_margin*2.0)/(max-min)*(max-(*data)(r,c));
+
+            if(y>maxY)
+            {
+                maxY = y;
+            }
+
+            if(y<minY)
+            {
+                minY = y;
+            }
+
+            if(x!=currX)
+            {
+                if(minY!=INT_MAX && maxY!=INT_MIN)
+                {
+                    painter.drawLine(currX,minY,currX,maxY);
+                }
+                currX = x;
+                if(c!=column_count-1)
+                {
+                    minY = INT_MAX;
+                    maxY = INT_MIN;
+                }
+            }
+        }
+        if(minY!=INT_MAX && maxY!=INT_MIN)
+        {
+            painter.drawLine(currX,minY,currX,maxY);
+        }
+    }
+}
+
+void CustomizedPlot::plotLine()
+{
+
+    QPainter painter(this);
+
+    mrs_natural row_count = data->getRows();
+    mrs_natural column_count = data->getCols();
+
+    mrs_real max = data->maxval();
+    mrs_real min = data->minval();
+
+    if(max==min)
+    {
+        max++;
+        min--;
+    }
+
+    int total_count = data_size*m_debugger->getTickCount();
+    int offset = total_count-column_count;
+
+    for(mrs_natural r = 0; r<row_count;r++)
+    {
+        QPen pen;
+
+        //if(row_count<plot_width && column_count!=0)
+        //{
+        //    pen.setWidth(static_cast<int>(std::ceil(plot_width/total_count)));
+        //}
+        //else
+        //{
+        pen.setWidth(1);
+        //}
+        pen.setColor(QColor::fromHsvF( (qreal)r / row_count, 1, 1));
+        painter.setPen(pen);
+        mrs_natural prevMinY = INT_MAX;
+        mrs_natural prevMaxY = INT_MIN;
+
+        mrs_natural currMinY = INT_MAX;
+        mrs_natural currMaxY = INT_MIN;
+
+        mrs_natural currX = plot_margin;
+        mrs_natural prevX = plot_margin;
+
+        mrs_natural x, y;
+
+        for(mrs_natural c = 0; c<offset;c++)
+        {
+            x = (total_count==1 ? plot_margin : plot_margin + (width()-plot_margin*2.0)/(total_count-1)*c);
+            y = plot_margin + (height()-plot_margin*2.0)/(max-min)*(max);
+
+            if(y>currMaxY)
+            {
+                currMaxY = y;
+            }
+
+            if(y<currMinY)
+            {
+                currMinY = y;
+            }
+
+            if(x!=currX)
+            {
+
+                if(prevMaxY != INT_MIN)
+                {
+                    painter.drawLine(prevX,prevMaxY,currX,currMinY);
+                }
+                if(currMinY!=INT_MAX && currMaxY!=INT_MIN)
+                {
+                    painter.drawLine(currX,currMinY,currX,currMaxY);
+                }
+
+                prevMaxY = currMaxY;
+                prevMinY = currMinY;
+                prevX = currX;
+
+                currX = x;
+
+                currMinY = INT_MAX;
+                currMaxY = INT_MIN;
+            }
+            //std::cout<<x<<" "<<y<<" "<<" real values: "<<(*data)(r,c)<<" "<<c<<"\n";
+            //painter.drawPoint((int)(x),(int)(y));
+        }
+
+        for(mrs_natural c = 0; c<column_count;c++)
+        {
+            x = (total_count==1 ? plot_margin : plot_margin + (width()-plot_margin*2.0)/(total_count-1)*(c+offset));
+            y = plot_margin + (height()-plot_margin*2.0)/(max-min)*(max-(*data)(r,c));
+
+            if(y>currMaxY)
+            {
+                currMaxY = y;
+            }
+
+            if(y<currMinY)
+            {
+                currMinY = y;
+            }
+
+            if(x!=currX)
+            {
+
+                if(prevMaxY != INT_MIN)
+                {
+                    painter.drawLine(prevX,prevMaxY,currX,currMinY);
+                }
+                if(currMinY!=INT_MAX && currMaxY!=INT_MIN)
+                {
+                    painter.drawLine(currX,currMinY,currX,currMaxY);
+                }
+
+                prevMaxY = currMaxY;
+                prevMinY = currMinY;
+                prevX = currX;
+
+                currX = x;
+                if(c!=column_count-1)
+                {
+                    currMinY = INT_MAX;
+                    currMaxY = INT_MIN;
+                }
+            }
+
+        }
+        if(currMinY!=INT_MAX && currMaxY!=INT_MIN)
+        {
+            if(prevMinY!=INT_MAX && prevMaxY!=INT_MIN)
+            {
+                painter.drawLine(prevX,prevMaxY,currX,currMinY);
+            }
+            painter.drawLine(currX,currMinY,currX,currMaxY);
+        }
+    }
+}
+
+void CustomizedPlot::plotStick()
+{
+
+    QPainter painter(this);
+
+    mrs_natural row_count = data->getRows();
+    mrs_natural column_count = data->getCols();
+
+    mrs_real max = (data->getSize() > 0 ? data->maxval() : 1);
+    mrs_real min = (data->getSize() > 0 ? data->minval() : -1);
+
+    if(max==min)
+    {
+        max++;
+        min--;
+    }
+
+    mrs_natural total_count = data_size*m_debugger->getTickCount();
+    mrs_natural offset = total_count-column_count;
+
+    for(mrs_natural r = 0; r<row_count;r++)
+    {
+        QPen pen;
+        //if(row_count<plot_width && column_count!=0)
+        //{
+        //    pen.setWidth(static_cast<int>(std::ceil(plot_width/total_count)));
+        //}
+        //else
+        //{
+            pen.setWidth(1);
+        //}
+        pen.setColor(QColor::fromHsvF( (qreal)r / row_count, 1, 1));
+        painter.setPen(pen);
+        mrs_natural minY = INT_MAX;
+        mrs_natural maxY = INT_MIN;
+        mrs_natural currX = plot_margin;
+
+        mrs_natural x, y;
+
+        for(mrs_natural c = 0; c<offset;c++)
+        {
+            x = (total_count==1 ? plot_margin : plot_margin + (width()-plot_margin*2.0)/(total_count-1)*c);
+            y = plot_margin +  (height()-plot_margin*2.0)/(max-min)*max;
+
+            if(y>maxY)
+            {
+                maxY = y;
+            }
+
+            if(y<minY)
+            {
+                minY = y;
+            }
+
+            if(x!=currX)
+            {
+                if(minY!=INT_MAX && maxY!=INT_MIN)
+                {
+                    if(maxY>height()/2)
+                    {
+                        painter.drawLine(currX,height()-plot_margin,currX,maxY);
+                    }
+                    if(minY<height()/2)
+                    {
+                        painter.drawLine(currX,minY,currX,height()-plot_margin);
+                    }
+                }
+                currX = x;
+                minY = INT_MAX;
+                maxY = INT_MIN;
+            }
+        }
+
+        for(mrs_natural c = 0; c<column_count;c++)
+        {
+            x = (total_count==1 ? plot_margin : plot_margin + (width()-plot_margin*2.0)/(total_count-1)*(c+offset));
+            mrs_real y = plot_margin +  (height()-plot_margin*2.0)/(max-min)*(max-(*data)(r,c));
+
+            if(y>maxY)
+            {
+                maxY = y;
+            }
+
+            if(y<minY)
+            {
+                minY = y;
+            }
+
+            if(x!=currX)
+            {
+                if(minY!=INT_MAX && maxY!=INT_MIN)
+                {
+                    if(maxY>height()/2)
+                    {
+                        painter.drawLine(currX,height()-plot_margin,currX,maxY);
+                    }
+                    if(minY<height()/2)
+                    {
+                        painter.drawLine(currX,minY,currX,height()-plot_margin);
+                    }
+                }
+                currX = x;
+                if(c!=column_count-1)
+                {
+                    minY = INT_MAX;
+                    maxY = INT_MIN;
+                }
+            }
+        }
+        if(minY!=INT_MAX && maxY!=INT_MIN)
+        {
+            if(maxY>0)
+            {
+                painter.drawLine(currX,0,currX,maxY);
+            }
+            if(minY<0)
+            {
+                painter.drawLine(currX,minY,currX,0);
+            }
+        }
+    }
+}
+
+void CustomizedPlot::plotWidgetOutline()
+{
+    QPainter painter(this);
+
+    QPen pen;
+    pen.setColor(QColor(0, 0, 255));
+    pen.setWidth(1);
+    painter.setPen(pen);
+
+    painter.drawRect(plot_margin, plot_margin, width()-2*plot_margin, height()-2*plot_margin);
+}
 
 CustomizedTrackWidget::CustomizedTrackWidget( DebugController *debugger, QWidget * parent ):
   QWidget(parent),
   m_debugger(debugger),
   m_display_port(false),
   m_port_type(UndefinedFlowDirection),
-  m_system(0)//,
-  //m_plot(0)
+  m_system(0)
 {
   setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Expanding );
 
@@ -39,11 +437,17 @@ CustomizedTrackWidget::CustomizedTrackWidget( DebugController *debugger, QWidget
   m_table = new MarsyasQt::RealvecTableWidget;
   m_table->setEditable(false);
 
-  m_plotter = new track::CustomizedPlot;
+  m_plotter = new CustomizedPlot(m_debugger);
 
   m_stack = new QStackedLayout();
   m_stack->addWidget(m_table);
   m_stack->addWidget(m_plotter);
+
+  m_select_button = new QPushButton();
+  m_select_button->resize(8,80);
+  m_select_button->setText("s\ne\nl\ne\nc\nt");
+
+  connect(m_select_button,SIGNAL(clicked()),this,SLOT(emitCurrTrackWidget()));
 
   // Toolbar
 
@@ -82,6 +486,7 @@ CustomizedTrackWidget::CustomizedTrackWidget( DebugController *debugger, QWidget
   QHBoxLayout *layout = new QHBoxLayout();
   layout->setContentsMargins(0,0,0,0);
   layout->setSpacing(0);
+  layout->addWidget(m_select_button);
   layout->addLayout(m_stack);
   layout->addLayout(tool_layout);
 
@@ -97,7 +502,13 @@ CustomizedTrackWidget::CustomizedTrackWidget( DebugController *debugger, QWidget
 CustomizedTrackWidget::~CustomizedTrackWidget()
 {
   // must manually delete m_plot because it's destructor accesses m_plotter
+
   delete m_plotter;
+  delete m_table;
+  delete m_stack;
+  delete m_display_type_selector;
+  delete m_auto_scale_btn;
+
 }
 
 //plot curves or image
@@ -159,16 +570,14 @@ void CustomizedTrackWidget::displayPort( MarSystem * system,
 //refresh from control or port and replot
 void CustomizedTrackWidget::refresh(bool doAutoScale)
 {
-  if (m_path.isEmpty()){
+  if (m_path.isEmpty())
+  {
     return;
   }
   if (m_display_port)
     refreshFromPort();
   else
     refreshFromControl();
-
-  //if (m_plot && doAutoScale)
-  //  m_plot->fitRange();
 
   m_plotter->update();
 }
@@ -181,13 +590,18 @@ void CustomizedTrackWidget::autoScale()
   //}
 }
 
+void CustomizedTrackWidget::emitCurrTrackWidget()
+{
+
+    emit currTrackWidget(this);
+}
+
 //clear plot and replot
 void CustomizedTrackWidget::clear()
 {
   m_path.clear();
   m_system = 0;
   clearPlot();
-  //m_plotter->replot();
   m_plotter->update();
   emit pathChanged(QString());
 }
@@ -199,22 +613,19 @@ void CustomizedTrackWidget::refreshFromControl()
   Q_ASSERT(!m_path.isEmpty());
 
   MarControlPtr control = m_system->getControl( m_path.toStdString() );
-  if (control.isInvalid()) {
+  if (control.isInvalid())
+  {
     qWarning() << "CustomizedTrackWidget: invalid control path:" << m_path;
     clearPlot();
     return;
   }
-
-  //const realvec & data = control->to<mrs_realvec>();
   const realvec & data = m_debugger->m_controls_acumulated[m_path.toStdString()].data;
+  m_plotter->setDataSize(m_debugger->m_controls_acumulated[m_path.toStdString()].data_size);
 
   m_table->setData(data);
 
   m_data = data;
   m_plotter->setData(&data);
-  //m_plotter->plotData();
-  //if (m_plot)
-  //  m_plot->setData(&m_data);
 }
 
 //set data from port and set data
@@ -225,17 +636,21 @@ void CustomizedTrackWidget::refreshFromPort()
 
   const realvec * data = 0;
 
-
-
-      switch(m_port_type)
-      {
-      case Input:
-        data = &m_debugger->m_ports_acummulated[m_path.toStdString()].data_input; break;
-      case Output:
-        data = &m_debugger->m_ports_acummulated[m_path.toStdString()].data_output; break;
-      default:
-        break;
-      }
+  switch(m_port_type)
+  {
+    case Input:
+      data = &m_debugger->m_ports_acummulated[m_path.toStdString()].data_input;
+      m_plotter->setDataSize(m_debugger->m_ports_acummulated[m_path.toStdString()].input_data_size);
+      std::cout<<"input data size:"<<m_debugger->m_ports_acummulated[m_path.toStdString()].input_data_size<<"\n";
+      break;
+    case Output:
+      data = &m_debugger->m_ports_acummulated[m_path.toStdString()].data_output;
+      m_plotter->setDataSize(m_debugger->m_ports_acummulated[m_path.toStdString()].output_data_size);
+      std::cout<<"output data size:"<<m_debugger->m_ports_acummulated[m_path.toStdString()].output_data_size<<"\n";
+      break;
+    default:
+      break;
+  }
 
   if (!data)
   {
@@ -247,9 +662,6 @@ void CustomizedTrackWidget::refreshFromPort()
 
   m_data = *data;
   m_plotter->setData(data);
-  //m_plotter->plotData();
-  //if (m_plot)
-  //  m_plot->setData(&m_data);
 }
 
 //reset m_data
@@ -259,8 +671,4 @@ void CustomizedTrackWidget::clearPlot()
   m_data = realvec();
   m_table->setData( realvec() );
   m_plotter->setData(0);
-  //m_plotter->plotData();
-  //if (m_plot)
-  //  m_plot->clear();
-
 }

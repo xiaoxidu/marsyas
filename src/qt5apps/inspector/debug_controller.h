@@ -17,29 +17,28 @@ class DebugController : public QObject
 public:
 
   struct controlInformation{
-    int tick_offset;
+    int data_size;
     Marsyas::realvec data;
 
-    controlInformation(): tick_offset(0), data(){
+    controlInformation(): data_size(1), data() {}
 
-   }
+    controlInformation(int size): data_size(size), data() {}
 
-    controlInformation(int offset): tick_offset(offset), data(){
-
-    }
+    int& getDataSize() { return data_size; }
   };
 
   struct portInformation{
-    int tick_offset;
+    int input_data_size;
+    int output_data_size;
     Marsyas::realvec data_input;
     Marsyas::realvec data_output;
 
-    portInformation(): tick_offset(0), data_input(), data_output(){
+    int& getInputDataSize() { return input_data_size; }
+    int& getOutputDataSize() { return output_data_size; }
 
-    }
-    portInformation(int offset): tick_offset(offset), data_input(), data_output(){
+    portInformation(): input_data_size(1), output_data_size(1), data_input(), data_output() {}
 
-    }
+    portInformation(int input_size, int output_size): input_data_size(input_size), output_data_size(output_size), data_input(), data_output() {}
   };
 
   DebugController( QObject * parent = 0 );
@@ -58,6 +57,8 @@ public:
   {
     return m_report;
   }
+
+  const int getTickCount() const { return m_tick_count; }
 
 public slots:
   void tick( int count = 1 );

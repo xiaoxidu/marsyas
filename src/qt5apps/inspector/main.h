@@ -14,6 +14,7 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QTabWidget>
+#include <QBoxLayout>
 
 #include <QQmlPropertyMap>
 #include <QQmlEngine>
@@ -23,7 +24,7 @@
 
 using namespace Marsyas;
 
-class TrackWidget;
+class CustomizedTrackWidget;
 class RealvecWidget;
 
 class ControlsWidget;
@@ -33,6 +34,8 @@ class DebugController;
 class MessageDockWidget;
 class CaptureWidget;
 class Main;
+
+class TrackDockWidget;
 
 class ActionManager
 {
@@ -90,6 +93,7 @@ public slots:
   void openRecording();
   void tick();
   void rewind();
+  void setCurrentTrackWidget(CustomizedTrackWidget * currTrackWidget);
 
 signals:
   void systemChanged();
@@ -106,8 +110,8 @@ private:
 
 private slots:  
   void addRealvecWidget();
-  void addTrackWidget();
-  void removeTrackWidget();
+  void addCustomizedTrackWidget();
+  void removeCustomizedTrackWidget();
   void onReferenceChanged(const QString &filename);
   void onTickCountChanged(int count);
   void updateGraphBugs();
@@ -157,16 +161,14 @@ private:
   QQuickView *m_graph;
   ControlsWidget *m_controls_widget;
   StatisticsWidget *m_stats_widget;
-  CaptureWidget *m_capture_widget;
   QPointer<RealvecWidget> m_current_signal_widget;
 
-  QPointer<TrackWidget> m_current_track_widget;
+  QPointer<CustomizedTrackWidget> m_current_track_widget;
 
   QDockWidget *m_dock_stats_widget;
   MessageDockWidget *m_dock_msg_widget;
-  QDockWidget *m_dock_capture_widget;
 
-  QTabWidget * m_tab_capture_widget;
+  TrackDockWidget * m_dock_track_widget;
 };
 
 class SignalDockWidget : public QDockWidget
@@ -193,18 +195,34 @@ class TrackDockWidget : public QDockWidget
   Q_OBJECT
 
 private:
-  TrackWidget *m_track_widget;
+  QBoxLayout *m_track_layout;
+  QWidget * m_widget;
+  CustomizedTrackWidget *m_track_widget;
+  DebugController* m_debugger;
+
 
 public:
   TrackDockWidget(DebugController* debugger);
 
-  TrackWidget * widget() { return m_track_widget; }
+  CustomizedTrackWidget * widget() { return m_track_widget; }
+
+  ~TrackDockWidget();
+
+  void addTrackWidget();
+
+  void removeTrackWidget();
 
   virtual void mousePressEvent(QMouseEvent *);
-  virtual void closeEvent(QCloseEvent *);
+  virtual void mouseMoveEvent(QMouseEvent *);
+
+protected:
+  void paintEvent(QPaintEvent *p);
 
 signals:
-  void clicked(TrackWidget*);
+  void clicked(CustomizedTrackWidget*);
+
+public slots:
+  void clickTrackWidget(CustomizedTrackWidget*);
 };
 
 class StatusLabel : public QLabel

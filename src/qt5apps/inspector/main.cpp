@@ -6,7 +6,8 @@
 #include "widgets/realvec_widget.h"
 #include "widgets/stats_widget.h"
 //#include "widgets/capture_widget.h"
-#include "widgets/track_widget.h"
+//#include "widgets/track_widget.h"
+#include "widgets/customized_track_widget.h"
 
 #include <marsyas/system/MarSystemManager.h>
 
@@ -111,18 +112,24 @@ void SignalDockWidget::closeEvent(QCloseEvent *event)
   deleteLater();
 }
 
-TrackDockWidget::TrackDockWidget(DebugController* debugger):
-    m_track_widget(new TrackWidget(debugger))
+TrackDockWidget::TrackDockWidget(DebugController* debugger)
 {
-    setWidget(m_track_widget);
+    m_debugger = debugger;
+    //setWidget(m_track_widget);
+    m_widget = new QWidget();
+    setWidget(m_widget);
+    m_track_layout = new QBoxLayout(QBoxLayout::TopToBottom);
+    m_widget->setLayout(m_track_layout);
     setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Expanding );
+
+    m_track_widget = NULL;
 
     setWindowTitle("Empty Signal View");
 
-    connect( debugger, SIGNAL(ticked()),
+    /*connect( debugger, SIGNAL(ticked()),
              m_track_widget, SLOT(refresh()) );
 
-    connect( m_track_widget, &TrackWidget::pathChanged,
+    connect( m_track_widget, &CustomizedTrackWidget::pathChanged,
              [this](const QString & title)
 
     {
@@ -130,18 +137,81 @@ TrackDockWidget::TrackDockWidget(DebugController* debugger):
         setWindowTitle(title);
       else
         setWindowTitle("Empty Signal View");
+    });*/
+}
+
+TrackDockWidget::~TrackDockWidget(){
+    delete m_track_layout;
+    delete m_widget;
+}
+
+void TrackDockWidget::addTrackWidget(){
+    m_track_widget = new CustomizedTrackWidget(m_debugger);
+    //connect( m_debugger, SIGNAL(ticked()),
+    //         m_track_widget, SLOT(refresh()) );
+    connect( m_debugger, SIGNAL(tickCountChanged(int)),
+             m_track_widget, SLOT(refresh()) );
+
+
+
+    connect( m_track_widget, &CustomizedTrackWidget::pathChanged,
+             [this](const QString & title)
+
+    {
+        if (!title.isEmpty())
+            setWindowTitle(title);
+        else
+            setWindowTitle("Empty Signal View");
     });
+
+    connect(m_track_widget,SIGNAL(currTrackWidget(CustomizedTrackWidget*)),this,SLOT(clickTrackWidget(CustomizedTrackWidget*)));
+
+    m_track_layout->addWidget(m_track_widget);
+
+}
+
+void TrackDockWidget::removeTrackWidget()
+{
+    delete m_track_widget;
+    m_track_widget = NULL;
 }
 
 void TrackDockWidget::mousePressEvent(QMouseEvent *)
 {
-  emit clicked(m_track_widget);
+  update();
 }
 
-void TrackDockWidget::closeEvent(QCloseEvent *event)
+void TrackDockWidget::mouseMoveEvent(QMouseEvent *event)
 {
-  event->ignore();
-  deleteLater();
+  update();
+}
+
+void TrackDockWidget::paintEvent(QPaintEvent *p){
+    int x = this->mapFromGlobal(QCursor::pos()).x();
+    int y = this->mapFromGlobal(QCursor::pos()).y();
+    if(!m_track_widget)
+    {
+        return;
+    }
+
+    int left = this->m_track_widget->geometry().left()+m_track_widget->getPlotterLeft();
+    int right = this->m_track_widget->geometry().left()+m_track_widget->getPlotterRight();
+
+    if(x>=left && x<=right && y>=0 && y<=this->height())
+    {
+        QPainter painter(this);
+        QPen pen;
+        painter.setPen(pen);
+        pen.setColor(QColor(128,128,128));
+        pen.setWidth(2);
+        painter.drawLine(x,0,x,this->height());
+    }
+}
+
+void TrackDockWidget::clickTrackWidget(CustomizedTrackWidget* widget)
+{
+   m_track_widget = widget;
+   emit clicked(widget);
 }
 
 Main::Main():
@@ -216,28 +286,26 @@ Main::Main():
   m_main_window->addDockWidget(Qt::BottomDockWidgetArea, m_dock_msg_widget);
 
   m_stats_widget = new StatisticsWidget(&m_action_manager, m_debugger);
-  //m_capture_widget = new CaptureWidget();
 
   m_dock_stats_widget = new QDockWidget;
   m_dock_stats_widget->setWidget(m_stats_widget);
   m_dock_stats_widget->setWindowTitle("Statistics");
 
-  //m_dock_capture_widget = new QDockWidget;
-  //m_main_window->addDockWidget(Qt::BottomDockWidgetArea, m_dock_capture_widget);
-  //m_dock_capture_widget->setWindowTitle("Capture");
-  //m_tab_capture_widget = new QTabWidget;
-  //m_dock_capture_widget->setWidget(m_tab_capture_widget);
-
   m_main_window->addDockWidget(Qt::BottomDockWidgetArea, m_dock_stats_widget);
   m_main_window->tabifyDockWidget(m_dock_msg_widget, m_dock_stats_widget);
-  //m_main_window->tabifyDockWidget(m_dock_msg_widget, m_dock_capture_widget);
+
+  m_dock_track_widget = new TrackDockWidget(m_debugger);
+  m_main_window->addDockWidget(Qt::BottomDockWidgetArea, m_dock_track_widget);
+  m_main_window->tabifyDockWidget(m_dock_msg_widget, m_dock_track_widget);
+  m_dock_track_widget->raise();
+
+  m_dock_track_widget->hide();
 
 
   m_dock_msg_widget->raise();
 
   m_dock_msg_widget->hide();
   m_dock_stats_widget->hide();
-  //m_dock_capture_widget->hide();
 
   connect( this, SIGNAL(fileChanged(QString)), m_system_label,
            SLOT(setFileName(QString)) );
@@ -276,6 +344,7 @@ Main::~Main()
   // Must delete GUI explicitly, else can deadlock
   // in ~QApplication, while ongoing QML animation.
   // See GitHub issue #25.
+
   delete m_main_window;
   delete m_root_system;
 }
@@ -305,10 +374,10 @@ void Main::createActions()
   connect(a, SIGNAL(triggered()), this, SLOT(addRealvecWidget()));
 
   a = action(ActionManager::AddTrack) = new QAction(tr("Add Track"), this);
-  connect(a, SIGNAL(triggered()), this, SLOT(addTrackWidget()));
+  connect(a, SIGNAL(triggered()), this, SLOT(addCustomizedTrackWidget()));
 
   a = action(ActionManager::RemoveTrack) = new QAction(tr("Remove Track"), this);
-  connect(a, SIGNAL(triggered()), this, SLOT(removeTrackWidget()));
+  connect(a, SIGNAL(triggered()), this, SLOT(removeCustomizedTrackWidget()));
 }
 
 void Main::createMenu()
@@ -338,7 +407,7 @@ void Main::createMenu()
   menu = menuBar->addMenu(tr("&View"));
   menu->addAction(m_dock_msg_widget->toggleViewAction());
   menu->addAction(m_dock_stats_widget->toggleViewAction());
-  //menu->addAction(m_dock_capture_widget->toggleViewAction());
+  menu->addAction(m_dock_track_widget->toggleViewAction());
   menu->addAction(action(ActionManager::AddRealvecWidget));
   menuBar->addMenu(menu);
 }
@@ -497,6 +566,10 @@ void Main::rewind()
   openSystem( m_system_filename );
 }
 
+void Main::setCurrentTrackWidget(CustomizedTrackWidget * widget){
+    m_current_track_widget = widget;
+}
+
 void Main::addRealvecWidget()
 {
   SignalDockWidget * dock_widget = new SignalDockWidget(m_debugger);
@@ -512,24 +585,24 @@ void Main::addRealvecWidget()
   m_current_signal_widget = dock_widget->widget();
 }
 
-void Main::addTrackWidget()
+void Main::addCustomizedTrackWidget()
 {
-    TrackDockWidget * dock_widget = new TrackDockWidget(m_debugger);
+    m_dock_track_widget->addTrackWidget();
 
-    connect(dock_widget, &TrackDockWidget::clicked,
-            [this](TrackWidget* widget){ m_current_track_widget = widget; });
+    connect(m_dock_track_widget, &TrackDockWidget::clicked,
+            [this](CustomizedTrackWidget* widget){ m_current_track_widget = widget;});
+
+    m_current_track_widget = m_dock_track_widget->widget();
 
     connect(this, SIGNAL(systemChanged()),
-            dock_widget->widget(), SLOT(clear()));
+            m_current_track_widget, SLOT(clear()));
 
-    m_main_window->addDockWidget(Qt::BottomDockWidgetArea, dock_widget,Qt::Vertical);
 
-    m_current_track_widget = dock_widget->widget();
 }
 
-void Main::removeTrackWidget()
+void Main::removeCustomizedTrackWidget()
 {
-    //m_tab_capture_widget->removeTab(m_tab_capture_widget->currentIndex());
+    m_dock_track_widget->removeTrackWidget();
 }
 
 void Main::onReferenceChanged(const QString &filename)
@@ -572,7 +645,7 @@ void Main::systemInputClicked( const QString & path )
   if (m_current_signal_widget)
     m_current_signal_widget->displayPort(system, Input);
   if (m_current_track_widget)
-    m_current_track_widget->displayPort(system, TrackWidget::Input);
+    m_current_track_widget->displayPort(system, CustomizedTrackWidget::Input);
 }
 
 void Main::systemOutputClicked( const QString & path )
@@ -586,7 +659,7 @@ void Main::systemOutputClicked( const QString & path )
   if (m_current_signal_widget)
     m_current_signal_widget->displayPort(system, Output);
   if (m_current_track_widget)
-    m_current_track_widget->displayPort(system, TrackWidget::Output);
+    m_current_track_widget->displayPort(system, CustomizedTrackWidget::Output);
 }
 
 void Main::controlClicked( const QString & path )
